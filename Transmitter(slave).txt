@@ -1,0 +1,231 @@
+#include<reg51.h>
+#define lcd P3   
+#define output P1
+
+sbit ALE=P2^3;    //Assigning port 2.3 to address latch enable
+sbit OE=P2^6;     // Assigning port 2.6 to output enable/RD
+sbit SC=P2^4;      // Assigning port 2.4 to start conversion/WR
+sbit EOC=P2^5;      // Assigning port 2.5 to end of conversion/INTR
+sbit Add_A=P2^0;       // ADC Address A
+sbit Add_B=P2^1;          // ADC Address B
+sbit Add_C=P2^2;              // ADC Address C
+sbit motor=P2^7;           // DC motor
+sbit M1=P3^2;              // pin 1 of stepper motor
+sbit M2=P3^3;               // pin 1 of stepper motor
+sbit M3=P3^4;                // pin 1 of stepper motor
+sbit M4=P3^5;                  // pin 1 of stepper motor
+
+//PROTOTYPING
+unsigned char ADCv();        
+void ADCvConvert(unsigned char);
+unsigned char ADCp();
+void ADCpConvert(unsigned char);
+unsigned char ADCt();
+void ADCtConvert(unsigned char);
+void tempAuto(unsigned char);
+void pressureAuto(unsigned char);
+
+void rec () interrupt 4        // serial Interrupt
+{	
+if(RI==1) 
+{
+   if(SBUF=='v')                          //IF SBUF==V THAN READ DATA FROM CHANNEL 1 AND SEND IT TO MASTER
+ { ADCvConvert(ADCv()); }
+if(SBUF=='p')                          //IF SBUF==P THAN READ DATA FROM CHANNEL 2 AND SEND IT TO MASTER
+{   ADCpConvert(ADCp());  }
+if(SBUF=='t')                           //IF SBUF==T THAN READ DATA FROM CHANNEL 3 AND SEND IT TO MASTER
+ {  ADCtConvert(ADCt()); }
+ }
+ RI=0;
+ 
+ }
+
+ void tempAuto(unsigned char temp1)
+ {
+    unsigned char temp,tenth;
+   temp=temp1*1.99;
+   tenth=temp/10;
+	 if(tenth>=4)
+	 {motor=1;}
+	 else
+	 {motor=0;}
+    }
+    
+ void pressureAuto(unsigned char temp)
+ {
+    unsigned char pressure,tenth;
+   float vout;
+   vout=(5.0/256)*temp;
+	 pressure=((vout/5.0)+0.09)/0.009-1;
+	 tenth=pressure/10;
+	 if(tenth<4)
+	 {M1=1;
+		M2=0;
+		M3=0;
+		M4=1;}
+	 
+		if(tenth==4)
+	 {M1=0;
+		M2=0;
+		M3=0;
+		M4= 1;}
+	 
+	 if(tenth==5)
+	 {M1=0;
+		M2=0;
+		M3=1;
+		M4=1;}
+	 
+		if(tenth==6)
+	 {M1=0;
+		M2=0;
+		M3=1;
+		M4=0;}
+	 
+		if(tenth==7)
+	 {M1=0;
+		M2=1;
+		M3=1;
+		M4=0;}
+	 
+		if(tenth==8)
+	 {M1=1;
+		M2=1;
+		M3=1;
+		M4= 1;}
+    }   
+
+void TmDelay()     // generating a delay of 71ms
+{
+	TL0=00;      
+	TH0=00;
+	TR0=1;         // start timer
+	while(TF0==0);    // timer overflow flag
+	TF0=0;
+	TR0=0;
+}
+
+void main()
+{
+	TmDelay();
+  P1=0xFF;
+  TMOD = 0x21;      // timer 1 mode 2 
+  TH1 = 0xFD;      //9600 baud rate
+	TR0=1;
+  SCON = 0x50;     // mode 1, 8bit ,one stopbit and one startbit
+     
+   EOC=1;      // end of conversion or INTR  input
+   ALE=0;    // address latch enable    output
+   OE=0;      // output enable or RD(read)  output
+   SC=0;        // start conversion or WR(write) output
+	
+	IE=0x90;     // Interrupt enable   10010000
+	 TR1 = 1;     // start the timmer
+   tempAuto(ADCt());
+   pressureAuto(ADCp());
+}
+
+unsigned char ADCv()
+{
+    unsigned char volt;
+	//channel 0 of ADC0808
+    Add_A=0;         
+    Add_B=0;
+    Add_C=0;
+    ALE=1;   // address latch enable L-H pulse       
+    SC=1;    // start conversion  H pulse
+    ALE=0;      //address latch enable H-L pulse
+    SC=0;        //  start conversion L pulse
+    while(EOC==1);  // end of conversion wait for 0
+    while(EOC==0);   // end of conversion wait for 1
+    OE=1;          // output enable H pulse
+    volt=output;   
+    OE=0;         // output enable L pulse
+    return volt;
+}
+
+//converting analog Data of Voltage into Digital Data
+void ADCvConvert(unsigned char volt)
+{ 
+     unsigned char voltage;
+ voltage=(volt*5.02)/256;
+	 SBUF=voltage+0x30;
+	while (TI==0);
+	TI=0; 
+}
+unsigned char ADCp()
+{
+	//channel 0 of ADC0808
+	unsigned char temp;
+    Add_A=1;         
+    Add_B=0;
+    Add_C=0;
+    ALE=1;   // address latch enable L-H pulse       
+    SC=1;    // start conversion  H pulse
+    ALE=0;      //address latch enable H-L pulse
+    SC=0;        //  start conversion L pulse
+    while(EOC==1);  // end of conversion wait for 0
+    while(EOC==0);   // end of conversion wait for 1
+    OE=1;          // output enable H pulse
+	 temp=output;
+	 OE=0;       // output enable L pulse
+	 return temp;
+}
+
+//converting analog Data of pressure into Digital Data
+void ADCpConvert(unsigned char temp)
+{
+     unsigned char pressure,tenth,unit;
+   float vout;
+   vout=(5.0/256)*temp;
+	 pressure=((vout/5.0)+0.09)/0.009-1;    //0.0089
+	 tenth=pressure/10;
+	 tenth=tenth+0x30; 
+	 SBUF=tenth;
+	 while(TI==0);
+	    TI=0;
+	 TmDelay();TmDelay();TmDelay();
+	  unit=pressure%10;
+	 unit=unit+0x30;
+	 SBUF=unit;
+	while (TI==0);
+	TI=0;
+}
+	
+unsigned char ADCt()
+{
+	//channel 0 of ADC0808
+	unsigned char temp1;
+    Add_A=0;         
+    Add_B=1;
+    Add_C=0;
+    ALE=1;   // address latch enable L-H pulse       
+    SC=1;    // start conversion  H pulse
+    ALE=0;      //address latch enable H-L pulse
+    SC=0;        //  start conversion L pulse
+    while(EOC==1);  // end of conversion wait for 0
+    while(EOC==0);   // end of conversion wait for 1
+    OE=1;          // output enable H pulse
+	 temp1=output;
+	 OE=0;       // output enable L pulse
+	 return temp1;
+}
+
+//converting analog Data of temperature into Digital Data
+void ADCtConvert(unsigned char temp1)
+{
+    unsigned char temp,unit,tenth;
+   temp=temp1*1.99;
+	 tenth=temp/10;
+	 tenth=tenth+0x30; 
+	 SBUF=tenth;
+	 while(TI==0);
+	    TI=0;
+	 TmDelay();TmDelay();TmDelay();
+	 
+	 unit=temp%10;
+	 unit=unit+0x30;
+	 SBUF=unit;
+	while (TI==0);
+	TI=0;
+   }

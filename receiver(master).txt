@@ -1,0 +1,306 @@
+#include<reg51.h>
+#define lcd_data P1
+sbit rs=P3^6;
+sbit en=P3^7;
+sbit lamp=P2^0;
+void check(void);
+void pwd(void);
+void delay (int);
+void command (char);
+void display (char);
+void string (char *);
+void init (void);
+void keypad(void);
+int password[2];
+int x=0;
+sbit r1=P2^4;      // assigning position to row first port P1.0
+sbit r2=P2^5;        // assigning position to row 2nd port P1.1
+sbit r3=P2^6;   // assigning position to row 3rd port P1.2
+sbit r4=P2^7;   // assigning position to row 4th port P1.3
+sbit c1=P2^3;   // assigning position to column 1st port P1.4
+sbit c2=P2^2;   // assigning position to column 2nd port P1.5
+sbit c3=P2^1; 
+void receiverP();
+unsigned char receiverV();
+void receiverT();
+
+
+unsigned char receiverV()
+ {
+	 unsigned char Rx;
+	 while (RI==0);  // waiting till the time trasmission is succesfully done
+	 Rx = SBUF;
+	 RI =0;
+	 return Rx;
+ }
+
+	                          
+void delay (int d)
+{
+	unsigned char i;
+	for(;d>0;d--)
+	{
+		for(i=250;i>0;i--);
+		for(i=248;i>0;i--);
+	}
+}
+void command (char c)
+{
+	lcd_data=c;
+	rs=0;            // To send a command to the LCD
+	en=1;
+	delay(5);
+	en=0;
+}
+void display (char c)
+{
+	lcd_data=c;      
+	rs=1;           // displaying a character or Data
+	en=1;
+	delay(5);
+	en=0;
+}
+
+void string (char *p)
+{
+	while(*p)
+	{
+		display(*p++);
+	}
+}
+void init (void)
+{
+	command(0x38);      //Use two lines and 5x7 matrix
+	command(0x0c);     // on the display
+	command(0x01);      //Clearing the screen
+	command(0x80);       // Force cursor to beginning of the first line
+}
+void main()
+{
+	lamp=0;        
+   TMOD = 0x20;    // timer 1 mode 2 autoreload
+	TH1 = 0xFD;    // baud rate 9600
+	SCON = 0x50;     // serial control Register, serial mode 1 one start and stop Bit and 8 dataBit
+	TR1 = 1;   // start timer
+	init(); 
+	 while(1)
+  {  pwd();}
+       
+}
+void receiverP()
+ {
+	 unsigned char unit,tenth;
+	 while (RI==0);  // waiting till the time trasmission is succesfully done
+	 RI =0;
+	 tenth = SBUF;
+	 display(tenth);
+delay(50);	 
+	while (RI==0);  // waiting till the time trasmission is succesfully done
+	 RI =0;
+	 unit = SBUF;
+	 display(unit);
+	 
+ }
+ 
+ void receiverT()
+ {
+	 unsigned char unit,tenth;
+	 while (RI==0);  // waiting till the time trasmission is succesfully done
+	 RI =0;
+	 tenth = SBUF;
+	 display(tenth);
+	while (RI==0);  // waiting till the time trasmission is succesfully done
+	 RI =0;
+	 unit = SBUF;
+	 display(unit);
+ }
+ 
+ void keypad()
+ {
+	 string("1.voltage2.Pressure");
+	        command(0xc0);
+		string("3.temperature");
+	delay(300);
+	command(0x1);
+	 string("4.Lamp ON");
+	 delay(300);
+	 command(0xc0);
+		string("5.Lamp OFF");
+	 command(0x01);
+	  delay(300);
+	 
+	  while(1)
+    {
+       r1=0;r2=1,r3=1,r4=1;    // pulled up condition
+       if(c1==0)
+			 { {  SBUF='v';
+				while(TI==0);
+       TI=0;}
+				 string("voltage");
+	        command(0xc0);
+				 display(receiverV());
+			 string("Volts");
+				 delay(100);
+			 command(0x01);} 
+			 
+	  if(c2==0)
+       { {  SBUF='p';
+				while(TI==0);
+       TI=0;} 
+				 string("pressure");
+				  command(0xc0);
+				 receiverP();
+			  string("PA");
+	  delay(100);
+			 command(0x01);}
+			 	
+	  if(c3==0)
+			{ {  SBUF='t';
+				while(TI==0);
+       TI=0;} 
+				 string("Temp");
+				  command(0xc0);
+				 receiverT();
+			 string("C");
+	  delay(100);
+			 command(0x01);}
+			 
+	   r1=1;r2=0,r3=1,r4=1;
+	  if(c1==0)
+       {  lamp=1;
+				 string("Lamp ON");
+	  delay(100);
+			  command(0x01);}
+	  if(c2==0)
+       {  lamp=0;
+				 string("Lamp OFF");
+	  delay(100);
+			 command(0x01);}
+	  if(c3==0)
+       {  string("6");
+	  delay(100);}
+	  
+	  r1=1;r2=1,r3=0,r4=1;
+	  if(c1==0)
+       {  string("7");
+	  delay(100);}
+	  if(c2==0)
+       {  string("8");
+	  delay(100);}
+	  if(c3==0)
+       {  string("9");
+	  delay(100);}
+	  
+	  r1=1;r2=1,r3=1,r4=0;
+	  if(c1==0)
+       {  string("*");
+	  delay(100);}
+	  if(c2==0)
+       {  string("0");
+	  delay(100);}
+	  if(c3==0)
+       {  string("#");
+	  delay(100);}
+	}
+ }
+ void pwd()
+   {
+      string(" Enter Password");
+       command(0xC0);
+    while(1)
+    {
+       r1=0;r2=1,r3=1,r4=1;
+       if(c1==0)
+       { string("*");
+	  password[x]='1';
+	  x=x+1;
+	  delay(100);}
+	  if(c2==0)
+       {  string("*");
+	   password[x]='2';
+	  x=x+1;
+	  delay(100);}
+	  if(c3==0)
+       {  string("*");
+	   password[x]='3';
+	  x=x+1;
+	  delay(100);}
+	   r1=1;r2=0,r3=1,r4=1;
+	  if(c1==0)
+       {  string("*");
+	   password[x]='4';
+	  x=x+1;
+	  delay(100);}
+	  if(c2==0)
+       {  string("*");
+	   password[x]='5';
+	  x=x+1;
+	  delay(100);}
+	  if(c3==0)
+       {  string("*");
+	   password[x]='6';
+	  x=x+1;
+	  delay(100);}
+	  r1=1;r2=1,r3=0,r4=1;
+	  if(c1==0)
+       {  string("*");
+	   password[x]='7';
+	  x=x+1;
+	  delay(100);}
+	  if(c2==0)
+       {  string("*");
+	   password[x]='8';
+	  x=x+1;
+	  delay(100);}
+	  if(c3==0)
+       {  string("*");
+	   password[x]='9';
+	  x=x+1;
+	  delay(100);}
+	  r1=1;r2=1,r3=1,r4=0;
+	  if(c1==0)
+       {   x=0;
+		command(0x01);
+		command(0x80);
+		string ("ENTER PASSWORD");
+		delay (50);
+		command (0xc0); 
+		command(0x0F);  
+		pwd();}
+	  if(c2==0)
+       {  string("*");
+	   password[x]='0';
+	  x=x+1;
+	  delay(100);}
+	  if(c3==0)       // for pressing #
+       {  command(0x01);
+	  check();}
+       }
+    }
+	 
+		void check(void)
+{
+   if (password[0]=='0'&&password[1]=='1'&&password[2]=='2')
+   {string("Password Matched");
+		 delay(250);
+		 command(0x01);		 
+		  keypad();
+      delay(250);
+       x=0;
+     }
+      else
+      {string("Password Wrong");
+	 delay(250);
+	 command(0x01);
+	 string(" Try Again ");
+	 delay(250);
+	  command(0x01);
+	string ("PRESS '*' TO TRY");
+	     delay (50);
+	     command (0xc0);
+		 string ("AGAIN TO UNLOCK.");
+		 delay(50);
+		 command(0x0F);  
+		 pwd();}
+  delay(50);    
+   }
